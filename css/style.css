@@ -385,6 +385,102 @@ img { max-width: 100%; border-radius: 8px; }
 .row-wrong { background: var(--wrong-bg); }
 .row-detail { padding: 0.5rem 0.2rem 0.2rem; font-size: 0.92rem; }
 
+/* ---- 分野別正答率バー ---- */
+
+.cat-row { margin-bottom: 0.7rem; }
+.cat-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.88rem;
+  margin-bottom: 0.2rem;
+}
+.cat-rate { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; margin-left: 0.5rem; }
+.cat-bar {
+  height: 10px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.cat-bar-fill { height: 100%; border-radius: 999px; transition: width 0.4s; }
+.bar-high { background: var(--correct-border); }
+.bar-mid { background: var(--review); }
+.bar-low { background: var(--wrong-border); }
+
+/* ---- AIアドバイス ---- */
+
+.advice-card h3 { margin-top: 0; }
+.advice-lead { font-size: 0.88rem; margin: 0.3rem 0 0.8rem; }
+.advice-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.advice-hint { font-size: 0.8rem; margin: 0.6rem 0 0; }
+.advice-output { margin-top: 0.9rem; }
+.advice-loading { text-align: center; padding: 1rem 0; }
+.advice-error {
+  background: var(--wrong-bg);
+  border: 1px solid var(--wrong-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+}
+.advice-md {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.93rem;
+}
+.advice-md h3, .advice-md h4, .advice-md h5 { margin: 0.8rem 0 0.3rem; }
+.advice-md h3:first-child, .advice-md h4:first-child { margin-top: 0; }
+.advice-md ul, .advice-md ol { margin: 0.3rem 0; padding-left: 1.4rem; }
+.advice-md p { margin: 0.4rem 0; }
+.advice-prompt-text {
+  width: 100%;
+  font: inherit;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 0.6rem;
+}
+
+/* ---- 設定モーダル ---- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 24, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+.modal-card { width: 100%; max-width: 26rem; margin: 0; }
+.modal-card h3 { margin-top: 0; }
+.settings-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.7rem;
+}
+.settings-input {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  margin-top: 0.2rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.settings-note { font-size: 0.78rem; }
+.settings-note a { color: var(--primary); }
+.modal-actions { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+.modal-spacer { flex: 1; }
+
 @media (max-width: 480px) {
   main { padding: 0.6rem; }
   .card { padding: 1rem; border-radius: 12px; }
