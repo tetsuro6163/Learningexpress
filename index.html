@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Learning Express</title>
+  <meta name="description" content="Markdownから作る学習クイズアプリ">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚃</text></svg>">
+</head>
+<body>
+  <header class="app-header">
+    <h1 class="app-title" id="app-title">🚃 Learning Express</h1>
+    <div class="header-actions">
+      <button id="btn-theme" class="icon-btn" title="テーマ切替" aria-label="テーマ切替">🌙</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ホーム: デッキ一覧 -->
+    <section id="view-home" class="view">
+      <div id="deck-list" class="deck-list">
+        <p class="loading">読み込み中…</p>
+      </div>
+    </section>
+
+    <!-- クイズ画面 -->
+    <section id="view-quiz" class="view" hidden>
+      <div class="quiz-header">
+        <button id="btn-quit" class="text-btn">← 中断</button>
+        <div class="quiz-progress">
+          <span id="progress-label">1 / 10</span>
+          <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+        </div>
+      </div>
+      <div id="question-area"></div>
+    </section>
+
+    <!-- 結果画面 -->
+    <section id="view-result" class="view" hidden>
+      <div id="result-area"></div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Markdownで問題を追加できます。<a href="https://github.com/tetsuro6163/Learningexpress" target="_blank" rel="noopener">リポジトリ</a> の README を参照。</p>
+  </footer>
+
+  <script src="js/parser.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
