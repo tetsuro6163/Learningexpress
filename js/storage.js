@@ -5,6 +5,10 @@
   const STATS_KEY = 'lx:stats:v1';
   const WRONG_KEY = 'lx:wrong:v1';
   const THEME_KEY = 'lx:theme';
+  const HISTORY_KEY = 'lx:history:v1';   // セッション履歴(分野別内訳つき)
+  const QSTATS_KEY = 'lx:qstats:v1';     // 問題ごとの解答統計
+  const AI_KEY = 'lx:ai:v1';             // AIアドバイス設定(APIキー等)
+  const HISTORY_LIMIT = 50;              // デッキごとに保持するセッション数
 
   function load(key, fallback) {
     try {
@@ -55,6 +59,47 @@
       all[deckId] = Array.from(set);
       save(WRONG_KEY, all);
     },
+
+    // セッション履歴: {at, mode, category, total, correct, score, elapsedSec,
+    //                  cats: {分野名: [正解数, 出題数]}, types: {形式: [正解数, 出題数]}}
+    getHistory(deckId) {
+      const all = load(HISTORY_KEY, {});
+      return all[deckId] || [];
+    },
+
+    recordSession(deckId, session) {
+      const all = load(HISTORY_KEY, {});
+      const list = all[deckId] || [];
+      list.push(session);
+      if (list.length > HISTORY_LIMIT) list.splice(0, list.length - HISTORY_LIMIT);
+      all[deckId] = list;
+      save(HISTORY_KEY, all);
+    },
+
+    // 問題ごとの統計: {a: 解答回数, c: 正解回数, s: 連続正解数, t: 最終解答時刻}
+    getQuestionStats(deckId) {
+      const all = load(QSTATS_KEY, {});
+      return all[deckId] || {};
+    },
+
+    recordQuestionResults(deckId, results) {
+      const all = load(QSTATS_KEY, {});
+      const stats = all[deckId] || {};
+      const now = Date.now();
+      results.forEach(({ id, correct }) => {
+        const q = stats[id] || { a: 0, c: 0, s: 0, t: 0 };
+        q.a += 1;
+        if (correct) { q.c += 1; q.s += 1; } else { q.s = 0; }
+        q.t = now;
+        stats[id] = q;
+      });
+      all[deckId] = stats;
+      save(QSTATS_KEY, all);
+    },
+
+    // AIアドバイス設定 {apiKey, model}
+    getAiSettings() { return load(AI_KEY, {}); },
+    setAiSettings(settings) { save(AI_KEY, settings); },
 
     getTheme() { return localStorage.getItem(THEME_KEY); },
     setTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {} },

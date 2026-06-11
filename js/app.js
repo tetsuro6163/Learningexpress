@@ -59,6 +59,7 @@
   // ---------- ホーム画面 ----------
 
   function renderHome() {
+    LXAdvice.renderPanel($('#home-advice'), state.decks);
     const container = $('#deck-list');
     if (state.decks.length === 0) {
       container.innerHTML =
@@ -432,6 +433,27 @@
       s.results.filter(r => !r.correct).map(r => r.q.id),
       s.results.filter(r => r.correct).map(r => r.q.id)
     );
+    LXStore.recordQuestionResults(deckId, s.results.map(r => ({ id: r.q.id, correct: r.correct })));
+
+    // 分野別・形式別の内訳を集計して履歴に残す
+    const catBreak = {};
+    const typeBreak = {};
+    s.results.forEach(r => {
+      const cat = r.q.category || '(分野なし)';
+      (catBreak[cat] = catBreak[cat] || [0, 0])[1] += 1;
+      if (r.correct) catBreak[cat][0] += 1;
+      (typeBreak[r.q.type] = typeBreak[r.q.type] || [0, 0])[1] += 1;
+      if (r.correct) typeBreak[r.q.type][0] += 1;
+    });
+    LXStore.recordSession(deckId, {
+      at: Date.now(),
+      mode: s.mode,
+      category: s.opts.category || '',
+      total, correct: correctCount, score,
+      elapsedSec: elapsed,
+      cats: catBreak,
+      types: typeBreak,
+    });
 
     const msg = score === 100 ? '🎉 パーフェクト！'
       : score >= 80 ? '🌟 すばらしい！'
@@ -451,6 +473,22 @@
     const wrongRemain = LXStore.getWrongIds(deckId);
     const wrongCount = s.deckEntry.deck.questions.filter(q => wrongRemain.has(q.id)).length;
 
+    // 今回のセッションの分野別正答率(分野が2つ以上ある場合のみ表示)
+    const catEntries = Object.entries(catBreak);
+    const catBars = catEntries.length > 1
+      ? `<div class="card">
+          <h3>分野別の成績(今回)</h3>
+          ${catEntries.map(([cat, [ok, all]]) => {
+            const rate = Math.round((ok / all) * 100);
+            const cls = rate >= 80 ? 'bar-high' : rate >= 60 ? 'bar-mid' : 'bar-low';
+            return `<div class="cat-row">
+              <div class="cat-row-head"><span class="cat-name">${LXParser.inlineMd(cat)}</span><span class="cat-rate">${ok}/${all} (${rate}%)</span></div>
+              <div class="cat-bar"><div class="cat-bar-fill ${cls}" style="width:${rate}%"></div></div>
+            </div>`;
+          }).join('')}
+        </div>`
+      : '';
+
     $('#result-area').innerHTML = `
       <div class="card result-card">
         <h2>結果 — ${LXParser.inlineMd(s.deckEntry.deck.title)}</h2>
@@ -465,10 +503,14 @@
           <button class="btn" id="btn-home">ホームへ</button>
         </div>
       </div>
+      ${catBars}
+      <div id="result-advice"></div>
       <div class="card">
         <h3>問題の振り返り</h3>
         ${reviewRows}
       </div>`;
+
+    LXAdvice.renderPanel($('#result-advice'), state.decks);
 
     const entry = s.deckEntry;
     const mode = s.mode;
@@ -537,6 +579,7 @@
       if (confirm('クイズを中断してホームに戻りますか？')) goHome();
     });
     $('#app-title').addEventListener('click', goHome);
+    $('#btn-settings').addEventListener('click', () => LXAdvice.openSettings());
     document.addEventListener('keydown', onKeydown);
 
     try {
