@@ -7,6 +7,7 @@
     multi: '複数選択',
     order: '並び替え',
     tf: '正誤(○×)',
+    flash: 'カード(自己採点)',
   };
 
   const state = {
@@ -78,6 +79,11 @@
       const typeBadges = Object.entries(typeCounts)
         .map(([t, n]) => `<span class="badge">${TYPE_LABEL[t]} ${n}</span>`).join('');
 
+      // 章(カテゴリ)一覧
+      const catCounts = {};
+      deck.questions.forEach(q => { if (q.category) catCounts[q.category] = (catCounts[q.category] || 0) + 1; });
+      const cats = Object.keys(catCounts);
+
       const card = document.createElement('div');
       card.className = 'card deck-card';
       card.innerHTML = `
@@ -92,7 +98,28 @@
             ? `挑戦 ${stats.attempts} 回 ／ 前回 ${stats.last}% ／ 自己ベスト ${stats.best}%`
             : 'まだ挑戦していません'}
         </div>
+        <div class="deck-filter"></div>
         <div class="deck-actions"></div>`;
+
+      // 章フィルタ(章が2つ以上あるデッキのみ)
+      let select = null;
+      if (cats.length > 1) {
+        const filter = card.querySelector('.deck-filter');
+        const lbl = document.createElement('label');
+        lbl.className = 'chapter-label';
+        lbl.textContent = '出題範囲: ';
+        select = document.createElement('select');
+        select.className = 'chapter-select';
+        select.innerHTML = `<option value="">全範囲 (${deck.questions.length}問)</option>` +
+          cats.map(c => `<option value="${c.replace(/"/g, '&quot;')}">${c} (${catCounts[c]}問)</option>`).join('');
+        lbl.appendChild(select);
+        filter.appendChild(lbl);
+      }
+      const currentCategory = () => (select ? select.value : '');
+      const filteredCount = () => {
+        const c = currentCategory();
+        return c ? catCounts[c] : deck.questions.length;
+      };
 
       const actions = card.querySelector('.deck-actions');
       const mkBtn = (label, cls, handler) => {
@@ -101,11 +128,19 @@
         b.textContent = label;
         b.addEventListener('click', handler);
         actions.appendChild(b);
+        return b;
       };
-      mkBtn('▶ 順番に解く', 'btn btn-primary', () => startQuiz(entry, 'normal'));
-      mkBtn('🔀 シャッフル', 'btn', () => startQuiz(entry, 'shuffle'));
+      mkBtn('▶ 順番に解く', 'btn btn-primary', () => startQuiz(entry, 'normal', { category: currentCategory() }));
+      mkBtn('🔀 シャッフル', 'btn', () => startQuiz(entry, 'shuffle', { category: currentCategory() }));
+
+      // 大きいデッキはランダム抜き出しモード
+      const randomBtn = mkBtn('🎲 ランダム20問', 'btn', () => startQuiz(entry, 'shuffle', { category: currentCategory(), limit: 20 }));
+      const syncRandom = () => { randomBtn.hidden = filteredCount() <= 20; };
+      syncRandom();
+      if (select) select.addEventListener('change', syncRandom);
+
       if (wrongCount > 0) {
-        mkBtn(`🔁 間違いを復習 (${wrongCount})`, 'btn btn-review', () => startQuiz(entry, 'review'));
+        mkBtn(`🔁 間違いを復習 (${wrongCount})`, 'btn btn-review', () => startQuiz(entry, 'review', {}));
       }
       container.appendChild(card);
     }
@@ -116,38 +151,42 @@
   function prepareQuestion(q) {
     const p = { src: q };
     if (q.type === 'choice' || q.type === 'multi') {
-      // 選択肢の並びを毎回シャッフル
       p.choices = shuffle(q.choices.map((c, i) => ({ html: c.html, correct: c.correct, srcIndex: i })));
       p.selected = new Set();
     } else if (q.type === 'order') {
-      // 正解と同じ並びで始まらないようにシャッフル
       const idx = q.items.map((_, i) => i);
       let arranged = shuffle(idx);
       for (let tries = 0; tries < 10 && arranged.every((v, i) => v === i); tries++) {
         arranged = shuffle(idx);
       }
-      p.arranged = arranged; // 表示順 → 元 index
+      p.arranged = arranged;
+    } else if (q.type === 'flash') {
+      p.revealed = false;
     }
     return p;
   }
 
-  function startQuiz(deckEntry, mode) {
+  function startQuiz(deckEntry, mode, opts) {
+    opts = opts || {};
     let questions = deckEntry.deck.questions.slice();
+
     if (mode === 'review') {
       const wrongIds = LXStore.getWrongIds(deckEntry.file);
-      questions = questions.filter(q => wrongIds.has(q.id));
-      questions = shuffle(questions);
-    } else if (mode === 'shuffle') {
-      questions = shuffle(questions);
+      questions = shuffle(questions.filter(q => wrongIds.has(q.id)));
+    } else {
+      if (opts.category) questions = questions.filter(q => q.category === opts.category);
+      if (mode === 'shuffle') questions = shuffle(questions);
+      if (opts.limit && questions.length > opts.limit) questions = questions.slice(0, opts.limit);
     }
     if (questions.length === 0) return;
 
     state.session = {
       deckEntry,
       mode,
+      opts,
       questions: questions.map(prepareQuestion),
       index: 0,
-      results: [], // {q, correct, detailHtml}
+      results: [],
       startedAt: Date.now(),
     };
     show('view-quiz');
@@ -167,7 +206,10 @@
     const area = $('#question-area');
     area.innerHTML = `
       <div class="card question-card">
-        <div class="q-type-badge badge">${TYPE_LABEL[q.type]}</div>
+        <div class="q-badges">
+          <span class="q-type-badge badge">${TYPE_LABEL[q.type]}</span>
+          ${q.category ? `<span class="badge badge-cat">${LXParser.inlineMd(q.category)}</span>` : ''}
+        </div>
         <h2 class="q-prompt">${q.promptHtml}</h2>
         ${q.bodyHtml ? `<div class="q-body">${q.bodyHtml}</div>` : ''}
         <div class="q-answers" id="q-answers"></div>
@@ -221,7 +263,36 @@
       submit.textContent = 'この順番で回答する';
       submit.addEventListener('click', judgeOrder);
       actions.appendChild(submit);
+    } else if (q.type === 'flash') {
+      renderFlash(p, answers, actions);
     }
+  }
+
+  function renderFlash(p, answers, actions) {
+    answers.innerHTML = `<div class="flash-back" id="flash-back" hidden>
+      <div class="flash-back-label">答え</div>${p.src.backHtml}</div>`;
+    const reveal = document.createElement('button');
+    reveal.className = 'btn btn-primary';
+    reveal.textContent = '答えを見る';
+    reveal.addEventListener('click', () => revealFlash(p));
+    actions.appendChild(reveal);
+  }
+
+  function revealFlash(p) {
+    if (p.revealed) return;
+    p.revealed = true;
+    $('#flash-back').hidden = false;
+    const actions = $('#q-actions');
+    actions.innerHTML = `<span class="flash-ask">正解できた?</span>`;
+    const mk = (label, cls, correct) => {
+      const b = document.createElement('button');
+      b.className = cls;
+      b.textContent = label;
+      b.addEventListener('click', () => { if (!p.answered) finishJudge(correct, ''); });
+      actions.appendChild(b);
+    };
+    mk('⭕ できた', 'btn btn-grade-ok', true);
+    mk('❌ できなかった', 'btn btn-grade-ng', false);
   }
 
   function renderOrderList(p, container) {
@@ -372,7 +443,8 @@
         <summary><span class="row-mark">${r.correct ? '○' : '×'}</span> ${i + 1}. ${r.q.promptHtml}</summary>
         <div class="row-detail">
           ${r.q.bodyHtml || ''}
-          ${r.q.explanationHtml ? `<div class="fb-explanation"><div class="fb-exp-label">💡 解説</div>${r.q.explanationHtml}</div>` : '<p class="muted">(解説なし)</p>'}
+          ${r.q.backHtml ? `<div class="fb-explanation"><div class="fb-exp-label">答え</div>${r.q.backHtml}</div>` : ''}
+          ${r.q.explanationHtml ? `<div class="fb-explanation"><div class="fb-exp-label">💡 解説</div>${r.q.explanationHtml}</div>` : (r.q.backHtml ? '' : '<p class="muted">(解説なし)</p>')}
         </div>
       </details>`).join('');
 
@@ -400,10 +472,11 @@
 
     const entry = s.deckEntry;
     const mode = s.mode;
-    $('#btn-retry').addEventListener('click', () => startQuiz(entry, mode === 'review' ? 'shuffle' : mode));
+    const opts = s.opts;
+    $('#btn-retry').addEventListener('click', () => startQuiz(entry, mode === 'review' ? 'shuffle' : mode, opts));
     $('#btn-home').addEventListener('click', goHome);
     const retryWrong = $('#btn-retry-wrong');
-    if (retryWrong) retryWrong.addEventListener('click', () => startQuiz(entry, 'review'));
+    if (retryWrong) retryWrong.addEventListener('click', () => startQuiz(entry, 'review', {}));
 
     state.session = null;
     show('view-result');
@@ -419,13 +492,17 @@
 
   function onKeydown(ev) {
     if (!state.session || document.getElementById('view-quiz').hidden) return;
-    if (ev.target.tagName === 'INPUT') return;
+    if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
     const p = currentQuestion();
 
     if (p.answered && ev.key === 'Enter') { ev.preventDefault(); nextQuestion(); return; }
     if (p.answered) return;
 
-    if (p.src.type === 'choice' && /^[1-9]$/.test(ev.key)) {
+    if (p.src.type === 'flash') {
+      if (!p.revealed && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); revealFlash(p); }
+      else if (p.revealed && (ev.key === 'o' || ev.key === '1')) finishJudge(true, '');
+      else if (p.revealed && (ev.key === 'x' || ev.key === '2')) finishJudge(false, '');
+    } else if (p.src.type === 'choice' && /^[1-9]$/.test(ev.key)) {
       const idx = parseInt(ev.key, 10) - 1;
       if (idx < p.choices.length) judgeChoice(idx);
     } else if (p.src.type === 'tf') {
