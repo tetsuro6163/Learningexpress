@@ -206,6 +206,7 @@
         actions.appendChild(b);
         return b;
       };
+      mkBtn('🧠 おまかせ特訓', 'btn btn-smart', () => startQuiz(entry, 'smart', { category: currentCategory() }));
       mkBtn('▶ 順番に解く', 'btn btn-primary', () => startQuiz(entry, 'normal', { category: currentCategory() }));
       mkBtn('🔀 シャッフル', 'btn', () => startQuiz(entry, 'shuffle', { category: currentCategory() }));
 
@@ -244,23 +245,31 @@
 
   function startQuiz(deckEntry, mode, opts) {
     opts = opts || {};
-    let questions = deckEntry.deck.questions.slice();
+    let prepared;
 
-    if (mode === 'review') {
-      const wrongIds = LXStore.getWrongIds(deckEntry.file);
-      questions = shuffle(questions.filter(q => wrongIds.has(q.id)));
+    if (mode === 'smart') {
+      // 学習状況に適応した出題(間違えた問題・苦手・復習どきを優先)
+      prepared = LXTrainer.select(deckEntry, { limit: opts.limit || 20, category: opts.category })
+        .map(({ q, reason, focused }) => Object.assign(prepareQuestion(q), { reason, focused }));
     } else {
-      if (opts.category) questions = questions.filter(q => q.category === opts.category);
-      if (mode === 'shuffle') questions = shuffle(questions);
-      if (opts.limit && questions.length > opts.limit) questions = questions.slice(0, opts.limit);
+      let questions = deckEntry.deck.questions.slice();
+      if (mode === 'review') {
+        const wrongIds = LXStore.getWrongIds(deckEntry.file);
+        questions = shuffle(questions.filter(q => wrongIds.has(q.id)));
+      } else {
+        if (opts.category) questions = questions.filter(q => q.category === opts.category);
+        if (mode === 'shuffle') questions = shuffle(questions);
+        if (opts.limit && questions.length > opts.limit) questions = questions.slice(0, opts.limit);
+      }
+      prepared = questions.map(prepareQuestion);
     }
-    if (questions.length === 0) return;
+    if (prepared.length === 0) return;
 
     state.session = {
       deckEntry,
       mode,
       opts,
-      questions: questions.map(prepareQuestion),
+      questions: prepared,
       index: 0,
       results: [],
       startedAt: Date.now(),
@@ -285,6 +294,7 @@
         <div class="q-badges">
           <span class="q-type-badge badge">${TYPE_LABEL[q.type]}</span>
           ${q.category ? `<span class="badge badge-cat">${LXParser.inlineMd(q.category)}</span>` : ''}
+          ${p.reason ? `<span class="badge badge-reason">${LXTrainer.REASON_LABEL[p.reason] || ''}${p.focused ? ' ・🤖重点' : ''}</span>` : ''}
         </div>
         <h2 class="q-prompt">${q.promptHtml}</h2>
         ${q.bodyHtml ? `<div class="q-body">${q.bodyHtml}</div>` : ''}

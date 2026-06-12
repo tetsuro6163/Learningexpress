@@ -572,6 +572,47 @@ img { max-width: 100%; border-radius: 10px; }
 .bar-mid { background: var(--review); }
 .bar-low { background: var(--wrong-border); }
 
+/* ---- おまかせ特訓 ---- */
+
+.btn-smart {
+  background: linear-gradient(135deg, #7048e8, #9775fa);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(112, 72, 232, 0.32);
+}
+.btn-smart:hover { filter: brightness(1.06); transform: translateY(-1px); }
+
+.badge-reason {
+  background: color-mix(in srgb, #7048e8 9%, var(--card-bg));
+  border-color: color-mix(in srgb, #7048e8 30%, var(--border));
+  color: color-mix(in srgb, #7048e8 70%, var(--text));
+  font-weight: 500;
+}
+[data-theme="dark"] .badge-reason {
+  background: color-mix(in srgb, #9775fa 14%, var(--card-bg));
+  border-color: color-mix(in srgb, #9775fa 35%, var(--border));
+  color: color-mix(in srgb, #9775fa 75%, var(--text));
+}
+
+.focus-note {
+  background: color-mix(in srgb, #7048e8 7%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, #7048e8 25%, var(--border));
+  border-radius: 12px;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 0.7rem;
+  font-size: 0.85rem;
+}
+.focus-headline { display: block; font-weight: 700; margin-bottom: 0.25rem; }
+.focus-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+.badge-focus {
+  background: linear-gradient(135deg, #7048e8, #9775fa);
+  border-color: transparent;
+  color: #fff;
+  margin-right: 0;
+}
+.focus-comment { display: block; color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem; }
+
 /* ---- AIアドバイス ---- */
 
 .advice-card {
