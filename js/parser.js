@@ -193,12 +193,23 @@
     return cells.length > 0 && cells.every(c => /^:?-{1,}:?$/.test(c.replace(/\s/g, '')));
   }
 
+  // 用語リスト形式のテーブルか(ヘッダーが「用語／定義」系か)を判定する。
+  // 先例・判例など1列目が長文のテーブルを用語集から除外するために使う。
+  const TERM_HEAD = /用語|語句|言葉|単語|term/i;
+  const DEF_HEAD = /定義|意味|説明|内容|definition|meaning/i;
+  function isGlossaryHeader(headerCells) {
+    if (!headerCells || headerCells.length < 2) return false;
+    return TERM_HEAD.test(headerCells[0]) || DEF_HEAD.test(headerCells[1]);
+  }
+
   function processTable(rows, category, questions, warnings, glossary) {
     if (rows.length < 2) return;
     const parsed = rows.map(tableCells);
     let start = 0;
     if (isSeparatorRow(parsed[1])) start = 2;       // header + separator を飛ばす
     else if (isSeparatorRow(parsed[0])) start = 1;
+    // 用語集への登録はヘッダー付きの用語リストテーブルに限る
+    const toGlossary = glossary && start === 2 && isGlossaryHeader(parsed[0]);
     for (let i = start; i < parsed.length; i++) {
       const cells = parsed[i];
       if (isSeparatorRow(cells)) continue;
@@ -206,7 +217,7 @@
       const front = cells[0];
       const back = cells.slice(1).filter(Boolean).join('\n\n');
       if (!back) continue;
-      if (glossary) glossary[front] = mdToHtml(back);
+      if (toGlossary) glossary[front] = mdToHtml(back);
       questions.push({
         id: hashId(category + '|tbl|' + front + '|' + back.slice(0, 40)),
         type: 'flash', category,

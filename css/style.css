@@ -732,8 +732,6 @@ img { max-width: 100%; border-radius: 10px; }
 .modal-actions { display: flex; gap: 0.5rem; margin-top: 0.9rem; }
 .modal-spacer { flex: 1; }
 
-/* ---- モバイル ---- */
-
 /* ---- 用語ツールチップ ---- */
 
 .glossary-term {
@@ -743,6 +741,11 @@ img { max-width: 100%; border-radius: 10px; }
   transition: background 0.1s;
 }
 .glossary-term:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.glossary-term:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 1px;
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
@@ -788,6 +791,8 @@ img { max-width: 100%; border-radius: 10px; }
 .gt-def p { margin: 0.2rem 0; }
 .gt-def p:first-child { margin-top: 0; }
 .gt-def p:last-child { margin-bottom: 0; }
+
+/* ---- モバイル ---- */
 
 @media (max-width: 480px) {
   main { padding: 0.7rem 0.6rem 1.5rem; }

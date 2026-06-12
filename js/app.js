@@ -26,20 +26,33 @@
       const termEl = ev.target.closest('.glossary-term');
       if (termEl) {
         ev.stopPropagation();
-        const term = termEl.dataset.term;
-        if (!tooltipEl.hidden && tooltipEl.querySelector('.gt-term').textContent === term) {
-          hideTooltip();
-        } else {
-          showTooltip(term, termEl);
-        }
+        toggleTooltip(termEl);
         return;
       }
       if (!tooltipEl.hidden && !tooltipEl.contains(ev.target)) hideTooltip();
     });
 
     document.addEventListener('keydown', ev => {
-      if (ev.key === 'Escape' && !tooltipEl.hidden) { hideTooltip(); ev.preventDefault(); }
+      if (ev.key === 'Escape' && !tooltipEl.hidden) { hideTooltip(); ev.preventDefault(); return; }
+      const termEl = ev.target.closest && ev.target.closest('.glossary-term');
+      if (termEl && (ev.key === 'Enter' || ev.key === ' ')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggleTooltip(termEl);
+      }
     });
+
+    // 開いたままスクロールすると吹き出しがアンカー語からずれるので閉じる
+    window.addEventListener('scroll', () => { if (!tooltipEl.hidden) hideTooltip(); }, { passive: true });
+  }
+
+  function toggleTooltip(termEl) {
+    const term = termEl.dataset.term;
+    if (!tooltipEl.hidden && tooltipEl.querySelector('.gt-term').textContent === term) {
+      hideTooltip();
+    } else {
+      showTooltip(term, termEl);
+    }
   }
 
   function showTooltip(term, anchorEl) {
@@ -118,6 +131,9 @@
           span.className = 'glossary-term';
           span.textContent = part;
           span.dataset.term = part;
+          span.tabIndex = 0;
+          span.setAttribute('role', 'button');
+          span.setAttribute('aria-label', part + ' の意味を表示');
           frag.appendChild(span);
         } else {
           frag.appendChild(document.createTextNode(part));
