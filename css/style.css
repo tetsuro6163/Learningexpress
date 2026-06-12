@@ -734,6 +734,61 @@ img { max-width: 100%; border-radius: 10px; }
 
 /* ---- モバイル ---- */
 
+/* ---- 用語ツールチップ ---- */
+
+.glossary-term {
+  border-bottom: 1.5px dotted var(--primary);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 0.1s;
+}
+.glossary-term:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.glossary-tooltip {
+  position: fixed;
+  z-index: 200;
+  width: 280px;
+  max-width: calc(100vw - 16px);
+  background: var(--card-bg);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.glossary-tooltip:not([hidden]) {
+  animation: tooltip-in 0.15s cubic-bezier(0.22, 0.9, 0.3, 1);
+}
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: none; }
+}
+.gt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  gap: 0.5rem;
+}
+.gt-term {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary);
+}
+.gt-close {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  padding: 0 0.3rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.gt-def p { margin: 0.2rem 0; }
+.gt-def p:first-child { margin-top: 0; }
+.gt-def p:last-child { margin-bottom: 0; }
+
 @media (max-width: 480px) {
   main { padding: 0.7rem 0.6rem 1.5rem; }
   .card { padding: 1rem 1.05rem; border-radius: 14px; }

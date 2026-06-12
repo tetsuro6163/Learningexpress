@@ -193,7 +193,7 @@
     return cells.length > 0 && cells.every(c => /^:?-{1,}:?$/.test(c.replace(/\s/g, '')));
   }
 
-  function processTable(rows, category, questions, warnings) {
+  function processTable(rows, category, questions, warnings, glossary) {
     if (rows.length < 2) return;
     const parsed = rows.map(tableCells);
     let start = 0;
@@ -206,6 +206,7 @@
       const front = cells[0];
       const back = cells.slice(1).filter(Boolean).join('\n\n');
       if (!back) continue;
+      if (glossary) glossary[front] = mdToHtml(back);
       questions.push({
         id: hashId(category + '|tbl|' + front + '|' + back.slice(0, 40)),
         type: 'flash', category,
@@ -217,7 +218,7 @@
     }
   }
 
-  function extractSection(category, lines, questions, warnings) {
+  function extractSection(category, lines, questions, warnings, glossary) {
     let i = 0;
     let inCode = false;
     while (i < lines.length) {
@@ -257,7 +258,7 @@
       if (isTableLine(line)) {
         const rows = [];
         while (i < lines.length && isTableLine(lines[i])) { rows.push(lines[i]); i++; }
-        processTable(rows, category, questions, warnings);
+        processTable(rows, category, questions, warnings, glossary);
         continue;
       }
 
@@ -288,6 +289,7 @@
     }
 
     const questions = [];
+    const glossary = {};
     let sawQuestion = false;
 
     for (const block of blocks) {
@@ -297,7 +299,7 @@
         continue;
       }
       const before = questions.length;
-      extractSection(block.heading, block.lines, questions, warnings);
+      extractSection(block.heading, block.lines, questions, warnings, glossary);
       if (questions.length === before && !sawQuestion) {
         // 最初の見出し+注記 → デッキの説明として扱う
         descParts.push('**' + block.heading + '**');
@@ -315,6 +317,7 @@
       descriptionHtml: mdToHtml(descParts.join('\n\n')),
       questions,
       warnings,
+      glossary,
     };
   }
 
