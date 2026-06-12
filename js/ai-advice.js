@@ -198,17 +198,56 @@
       profile.goal || profile.examDate
         ? '学習者プロフィール(目標・試験日・学習ペース)を踏まえて、現実的なプランにしてください。'
         : '',
-      '出力はMarkdownで、見出しと箇条書きを使って簡潔に。励ましの一言も添えてください。',
+      'アドバイス本文はMarkdownで、見出しと箇条書きを使って簡潔に。励ましの一言も添えてください。',
+      'あわせて、アプリの出題プログラムが重点的に出題すべき分野(focus)を、上のデータに登場する分野名と完全一致の表記で1〜3件選んでください。',
     ].filter(Boolean).join('\n');
   }
 
   // ---------- Claude API 呼び出し(ブラウザ直接・ユーザー自身のAPIキー) ----------
 
-  async function requestAdvice(prompt) {
-    const settings = LXStore.getAiSettings();
-    if (!settings.apiKey) {
-      throw new Error('APIキーが未設定です。右上の ⚙️ から設定してください。');
-    }
+  // 構造化出力スキーマ: アドバイス本文 + 出題プログラム用の重点分野
+  const OUTPUT_SCHEMA = {
+    type: 'json_schema',
+    schema: {
+      type: 'object',
+      properties: {
+        advice: { type: 'string', description: 'Markdown形式の学習アドバイス本文' },
+        focus: {
+          type: 'object',
+          description: '出題プログラムが重点出題する分野',
+          properties: {
+            categories: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', description: '学習データに登場する分野名(完全一致の表記)' },
+                  weight: { type: 'integer', enum: [1, 2, 3], description: '重点度(3が最重要)' },
+                  reason: { type: 'string', description: 'この分野を重点する理由(短く)' },
+                },
+                required: ['name', 'weight', 'reason'],
+                additionalProperties: false,
+              },
+            },
+            comment: { type: 'string', description: '出題方針のひとこと' },
+          },
+          required: ['categories', 'comment'],
+          additionalProperties: false,
+        },
+      },
+      required: ['advice', 'focus'],
+      additionalProperties: false,
+    },
+  };
+
+  async function callApi(settings, prompt, structured) {
+    const body = {
+      model: settings.model || DEFAULT_MODEL,
+      max_tokens: 8000,
+      thinking: { type: 'adaptive' },
+      messages: [{ role: 'user', content: prompt }],
+    };
+    if (structured) body.output_config = { format: OUTPUT_SCHEMA };
 
     let res;
     try {
@@ -221,12 +260,7 @@
           // ブラウザから直接呼び出すためのCORSオプトイン(キーは利用者自身のもの)
           'anthropic-dangerous-direct-browser-access': 'true',
         },
-        body: JSON.stringify({
-          model: settings.model || DEFAULT_MODEL,
-          max_tokens: 8000,
-          thinking: { type: 'adaptive' },
-          messages: [{ role: 'user', content: prompt }],
-        }),
+        body: JSON.stringify(body),
       });
     } catch (e) {
       throw new Error('通信に失敗しました。ネットワーク接続を確認してください。');
@@ -241,7 +275,9 @@
         429: 'レート制限中です。しばらく待ってから再試行してください。',
         529: 'APIが混雑しています。しばらく待ってから再試行してください。',
       }[res.status];
-      throw new Error(msg || `APIエラー (${res.status})${detail ? ': ' + detail : ''}`);
+      const err = new Error(msg || `APIエラー (${res.status})${detail ? ': ' + detail : ''}`);
+      err.status = res.status;
+      throw err;
     }
 
     const data = await res.json();
@@ -254,6 +290,31 @@
       .join('\n');
     if (!text) throw new Error('AIから有効な応答が得られませんでした。');
     return text;
+  }
+
+  // → {advice: Markdown文字列, focus: {categories, comment} | null}
+  async function requestAdvice(prompt) {
+    const settings = LXStore.getAiSettings();
+    if (!settings.apiKey) {
+      throw new Error('APIキーが未設定です。右上の ⚙️ から設定してください。');
+    }
+
+    let text;
+    try {
+      text = await callApi(settings, prompt, true);
+    } catch (e) {
+      // 構造化出力を受け付けないモデル・環境ではプレーン出力で再試行
+      if (e.status !== 400) throw e;
+      return { advice: await callApi(settings, prompt, false), focus: null };
+    }
+
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed.advice === 'string') {
+        return { advice: parsed.advice, focus: parsed.focus || null };
+      }
+    } catch (e) { /* JSONでなければ本文として扱う */ }
+    return { advice: text, focus: null };
   }
 
   // ---------- アドバイス(Markdown)の安全なHTML化 ----------
@@ -305,6 +366,20 @@
     return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
 
+  // 有効なAI出題プランをチップ表示するHTML(なければ空文字)
+  function focusNoteHtml(headline) {
+    const plan = LXStore.getFocusPlan();
+    if (!plan || !Array.isArray(plan.categories) || plan.categories.length === 0) return '';
+    if (Date.now() - plan.at > 14 * 86400000) return ''; // 14日で失効(trainer.jsと同じ)
+    return `
+      <div class="focus-note">
+        <span class="focus-headline">${headline}</span>
+        <span class="focus-chips">${plan.categories.map(c =>
+          `<span class="badge badge-focus" title="${escapeHtml(c.reason || '')}">${escapeHtml(c.name)}${'★'.repeat(Math.min(c.weight || 1, 3))}</span>`).join('')}</span>
+        ${plan.comment ? `<span class="focus-comment">${escapeHtml(plan.comment)}</span>` : ''}
+      </div>`;
+  }
+
   // ---------- アドバイスパネルのUI ----------
 
   // container にアドバイスUIを描画。decks は [{file, deck}]
@@ -340,13 +415,17 @@
     const genBtn = card.querySelector('#btn-advice-generate');
     const copyBtn = card.querySelector('#btn-advice-copy');
 
-    // 前回のアドバイスがあれば表示しておく
+    // 前回のアドバイス・有効な出題プランがあれば表示しておく
     const last = LXStore.getLastAdvice();
     if (last && last.text) {
       output.hidden = false;
       output.innerHTML = `
+        ${focusNoteHtml('🧠 AI出題プラン適用中 — おまかせ特訓で重点出題されます')}
         <p class="advice-meta">前回のアドバイス(${formatDateTime(last.at)}生成)</p>
         <div class="advice-md">${mdToHtml(last.text)}</div>`;
+    } else {
+      const planOnly = focusNoteHtml('🧠 AI出題プラン適用中 — おまかせ特訓で重点出題されます');
+      if (planOnly) { output.hidden = false; output.innerHTML = planOnly; }
     }
 
     genBtn.addEventListener('click', async () => {
@@ -354,9 +433,14 @@
       output.innerHTML = '<p class="muted advice-loading"><span class="spinner"></span> 学習データを分析中… (10〜60秒ほどかかります)</p>';
       genBtn.disabled = true;
       try {
-        const advice = await requestAdvice(buildPrompt(buildSummary(decks)));
-        LXStore.setLastAdvice({ at: Date.now(), text: advice });
-        output.innerHTML = `<div class="advice-md">${mdToHtml(advice)}</div>`;
+        const result = await requestAdvice(buildPrompt(buildSummary(decks)));
+        LXStore.setLastAdvice({ at: Date.now(), text: result.advice });
+        if (result.focus && Array.isArray(result.focus.categories) && result.focus.categories.length > 0) {
+          LXStore.setFocusPlan({ at: Date.now(), categories: result.focus.categories, comment: result.focus.comment || '' });
+        }
+        output.innerHTML = `
+          ${focusNoteHtml('🧠 出題プランを更新しました — おまかせ特訓で重点出題されます')}
+          <div class="advice-md">${mdToHtml(result.advice)}</div>`;
       } catch (e) {
         output.innerHTML = `<p class="advice-error">⚠️ ${escapeHtml(e.message)}</p>`;
       } finally {

@@ -11,6 +11,7 @@
   const DAYS_KEY = 'lx:days:v1';         // 日別の学習量 {YYYY-MM-DD: [解答数, 正解数]}
   const PROFILE_KEY = 'lx:profile:v1';   // 学習の目標・試験日
   const ADVICE_KEY = 'lx:advice:v1';     // 最後に生成したAIアドバイス
+  const FOCUS_KEY = 'lx:focus:v1';       // AI出題プラン(重点分野)
   const HISTORY_LIMIT = 50;              // デッキごとに保持するセッション数
 
   function load(key, fallback) {
@@ -120,6 +121,10 @@
     // 最後に生成したAIアドバイス {at, text}
     getLastAdvice() { return load(ADVICE_KEY, null); },
     setLastAdvice(a) { save(ADVICE_KEY, a); },
+
+    // AI出題プラン {at, categories: [{name, weight, reason}], comment}
+    getFocusPlan() { return load(FOCUS_KEY, null); },
+    setFocusPlan(p) { save(FOCUS_KEY, p); },
 
     // AIアドバイス設定 {apiKey, model}
     getAiSettings() { return load(AI_KEY, {}); },
