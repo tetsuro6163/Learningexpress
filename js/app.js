@@ -19,7 +19,13 @@
 
   function show(viewId) {
     ['view-home', 'view-quiz', 'view-result'].forEach(id => {
-      document.getElementById(id).hidden = (id !== viewId);
+      const el = document.getElementById(id);
+      el.hidden = (id !== viewId);
+      if (id === viewId) { // 表示時にフェードインを再生
+        el.classList.remove('view-enter');
+        void el.offsetWidth;
+        el.classList.add('view-enter');
+      }
     });
     window.scrollTo(0, 0);
   }
@@ -58,7 +64,75 @@
 
   // ---------- ホーム画面 ----------
 
+  // 学習ステータス(連続日数・今日の学習量・通算成績・目標)
+  function renderDashboard() {
+    const container = $('#home-dash');
+    let answered = 0, correct = 0;
+    state.decks.forEach(({ file }) => {
+      const st = LXStore.getStats(file);
+      answered += st.answered;
+      correct += st.correct;
+    });
+    if (answered === 0) { container.innerHTML = ''; return; }
+
+    const study = LXAdvice.studyStreak();
+    const profile = LXStore.getProfile();
+    const accuracy = Math.round((correct / answered) * 100);
+
+    let goalHtml = '';
+    if (profile.goal || profile.examDate) {
+      let countdown = '';
+      if (profile.examDate) {
+        const diff = Math.ceil((new Date(profile.examDate) - new Date()) / 86400000);
+        countdown = diff >= 0 ? `<span class="dash-countdown">あと <strong>${diff}</strong> 日</span>` : '';
+      }
+      goalHtml = `<div class="dash-goal"><span class="dash-goal-text">🎯 ${profile.goal ? LXParser.inlineMd(profile.goal) : '試験日'}</span>${countdown}</div>`;
+    }
+
+    container.innerHTML = `
+      <div class="card dash-card">
+        ${goalHtml}
+        <div class="dash-grid">
+          <div class="dash-item">
+            <span class="dash-num">${study.streak > 0 ? '🔥 ' : ''}${study.streak}<small>日</small></span>
+            <span class="dash-label">連続学習</span>
+          </div>
+          <div class="dash-item">
+            <span class="dash-num">${study.today[0]}<small>問</small></span>
+            <span class="dash-label">今日の解答</span>
+          </div>
+          <div class="dash-item">
+            <span class="dash-num">${answered}<small>問</small></span>
+            <span class="dash-label">累計解答</span>
+          </div>
+          <div class="dash-item">
+            <span class="dash-num">${accuracy}<small>%</small></span>
+            <span class="dash-label">通算正答率</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function masteryBarHtml(file, deck) {
+    const m = LXAdvice.computeMastery(file, deck);
+    if (m.mastered + m.learning + m.review === 0) return '';
+    const seg = (n, cls) => n > 0 ? `<span class="m-seg ${cls}" style="width:${(n / m.total) * 100}%"></span>` : '';
+    return `
+      <div class="deck-mastery">
+        <div class="mastery-bar">
+          ${seg(m.mastered, 'm-mastered')}${seg(m.learning, 'm-learning')}${seg(m.review, 'm-review')}${seg(m.unseen, 'm-unseen')}
+        </div>
+        <div class="mastery-legend">
+          <span class="m-dot m-mastered"></span>習得 ${m.mastered}
+          <span class="m-dot m-learning"></span>学習中 ${m.learning}
+          <span class="m-dot m-review"></span>要復習 ${m.review}
+          <span class="m-dot m-unseen"></span>未学習 ${m.unseen}
+        </div>
+      </div>`;
+  }
+
   function renderHome() {
+    renderDashboard();
     LXAdvice.renderPanel($('#home-advice'), state.decks);
     const container = $('#deck-list');
     if (state.decks.length === 0) {
@@ -99,6 +173,7 @@
             ? `挑戦 ${stats.attempts} 回 ／ 前回 ${stats.last}% ／ 自己ベスト ${stats.best}%`
             : 'まだ挑戦していません'}
         </div>
+        ${masteryBarHtml(file, deck)}
         <div class="deck-filter"></div>
         <div class="deck-actions"></div>`;
 
@@ -434,6 +509,7 @@
       s.results.filter(r => r.correct).map(r => r.q.id)
     );
     LXStore.recordQuestionResults(deckId, s.results.map(r => ({ id: r.q.id, correct: r.correct })));
+    LXStore.recordDailyActivity(total, correctCount);
 
     // 分野別・形式別の内訳を集計して履歴に残す
     const catBreak = {};
@@ -492,8 +568,8 @@
     $('#result-area').innerHTML = `
       <div class="card result-card">
         <h2>結果 — ${LXParser.inlineMd(s.deckEntry.deck.title)}</h2>
-        <div class="score-circle ${score >= 80 ? 'score-high' : score >= 60 ? 'score-mid' : 'score-low'}">
-          <span class="score-num">${score}</span><span class="score-unit">%</span>
+        <div class="score-circle ${score >= 80 ? 'score-high' : score >= 60 ? 'score-mid' : 'score-low'}" style="--p:${score}">
+          <div class="score-inner"><span class="score-num">${score}</span><span class="score-unit">%</span></div>
         </div>
         <p class="score-msg">${msg}</p>
         <p class="score-detail">${correctCount} / ${total} 問正解 ・ 所要時間 ${Math.floor(elapsed / 60)}分${elapsed % 60}秒</p>
@@ -580,6 +656,9 @@
     });
     $('#app-title').addEventListener('click', goHome);
     $('#btn-settings').addEventListener('click', () => LXAdvice.openSettings());
+    document.addEventListener('lx:settings-changed', () => {
+      if (!document.getElementById('view-home').hidden) renderHome();
+    });
     document.addEventListener('keydown', onKeydown);
 
     try {
