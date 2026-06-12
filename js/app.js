@@ -2,6 +2,147 @@
 (function () {
   'use strict';
 
+  // ---------- 用語ツールチップ ----------
+
+  let tooltipEl = null;
+  let activeGlossary = {};
+
+  function initTooltip() {
+    tooltipEl = document.createElement('div');
+    tooltipEl.id = 'glossary-tooltip';
+    tooltipEl.className = 'glossary-tooltip';
+    tooltipEl.hidden = true;
+    tooltipEl.setAttribute('role', 'tooltip');
+    tooltipEl.innerHTML =
+      '<div class="gt-header">' +
+        '<span class="gt-term"></span>' +
+        '<button class="gt-close icon-btn" aria-label="閉じる">×</button>' +
+      '</div>' +
+      '<div class="gt-def"></div>';
+    tooltipEl.querySelector('.gt-close').addEventListener('click', hideTooltip);
+    document.body.appendChild(tooltipEl);
+
+    document.addEventListener('click', ev => {
+      const termEl = ev.target.closest('.glossary-term');
+      if (termEl) {
+        ev.stopPropagation();
+        toggleTooltip(termEl);
+        return;
+      }
+      if (!tooltipEl.hidden && !tooltipEl.contains(ev.target)) hideTooltip();
+    });
+
+    document.addEventListener('keydown', ev => {
+      if (ev.key === 'Escape' && !tooltipEl.hidden) { hideTooltip(); ev.preventDefault(); return; }
+      const termEl = ev.target.closest && ev.target.closest('.glossary-term');
+      if (termEl && (ev.key === 'Enter' || ev.key === ' ')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggleTooltip(termEl);
+      }
+    });
+
+    // 開いたままスクロールすると吹き出しがアンカー語からずれるので閉じる
+    window.addEventListener('scroll', () => { if (!tooltipEl.hidden) hideTooltip(); }, { passive: true });
+  }
+
+  function toggleTooltip(termEl) {
+    const term = termEl.dataset.term;
+    if (!tooltipEl.hidden && tooltipEl.querySelector('.gt-term').textContent === term) {
+      hideTooltip();
+    } else {
+      showTooltip(term, termEl);
+    }
+  }
+
+  function showTooltip(term, anchorEl) {
+    if (!activeGlossary[term]) return;
+    tooltipEl.querySelector('.gt-term').textContent = term;
+    tooltipEl.querySelector('.gt-def').innerHTML = activeGlossary[term];
+    tooltipEl.style.top = '-9999px';
+    tooltipEl.style.left = '-9999px';
+    tooltipEl.hidden = false;
+
+    const rect = anchorEl.getBoundingClientRect();
+    const tw = tooltipEl.offsetWidth;
+    const th = tooltipEl.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 7;
+
+    let top = rect.bottom + gap;
+    if (top + th > vh - 8) top = rect.top - th - gap;
+    if (top < 8) top = 8;
+
+    let left = rect.left;
+    if (left + tw > vw - 8) left = vw - tw - 8;
+    if (left < 8) left = 8;
+
+    tooltipEl.style.top = top + 'px';
+    tooltipEl.style.left = left + 'px';
+  }
+
+  function hideTooltip() {
+    if (tooltipEl) tooltipEl.hidden = true;
+  }
+
+  function highlightGlossaryTerms(root, glossary) {
+    if (!root || !glossary) return;
+    const terms = Object.keys(glossary);
+    if (terms.length === 0) return;
+    activeGlossary = glossary;
+
+    terms.sort((a, b) => b.length - a.length);
+    const escaped = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp('(' + escaped.join('|') + ')', 'g');
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        let el = node.parentElement;
+        while (el && el !== root) {
+          const tag = el.tagName;
+          if (tag === 'CODE' || tag === 'PRE' || tag === 'SCRIPT' || tag === 'STYLE') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          if (el.classList.contains('glossary-term') || el.classList.contains('flash-term')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          el = el.parentElement;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (regex.test(node.textContent)) nodes.push(node);
+      regex.lastIndex = 0;
+    }
+
+    for (const textNode of nodes) {
+      const parts = textNode.textContent.split(regex);
+      if (parts.length <= 1) continue;
+      const frag = document.createDocumentFragment();
+      for (const part of parts) {
+        if (part === '') continue;
+        if (glossary[part] !== undefined) {
+          const span = document.createElement('span');
+          span.className = 'glossary-term';
+          span.textContent = part;
+          span.dataset.term = part;
+          span.tabIndex = 0;
+          span.setAttribute('role', 'button');
+          span.setAttribute('aria-label', part + ' の意味を表示');
+          frag.appendChild(span);
+        } else {
+          frag.appendChild(document.createTextNode(part));
+        }
+      }
+      textNode.parentNode.replaceChild(frag, textNode);
+    }
+  }
+
   const TYPE_LABEL = {
     choice: '四択・選択',
     multi: '複数選択',
@@ -265,6 +406,7 @@
     }
     if (prepared.length === 0) return;
 
+    activeGlossary = deckEntry.deck.glossary || {};
     state.session = {
       deckEntry,
       mode,
@@ -352,6 +494,7 @@
     } else if (q.type === 'flash') {
       renderFlash(p, answers, actions);
     }
+    highlightGlossaryTerms(area, activeGlossary);
   }
 
   function renderFlash(p, answers, actions) {
@@ -367,7 +510,9 @@
   function revealFlash(p) {
     if (p.revealed) return;
     p.revealed = true;
-    $('#flash-back').hidden = false;
+    const flashBack = $('#flash-back');
+    flashBack.hidden = false;
+    highlightGlossaryTerms(flashBack, activeGlossary);
     const actions = $('#q-actions');
     actions.innerHTML = `<span class="flash-ask">正解できた?</span>`;
     const mk = (label, cls, correct) => {
@@ -480,6 +625,7 @@
       <div class="fb-verdict">${correct ? '⭕ 正解！' : '❌ 不正解…'}</div>
       ${detailHtml ? `<div class="fb-detail">${detailHtml}</div>` : ''}
       ${p.src.explanationHtml ? `<div class="fb-explanation"><div class="fb-exp-label">💡 解説</div>${p.src.explanationHtml}</div>` : ''}`;
+    highlightGlossaryTerms(fb, activeGlossary);
 
     const actions = $('#q-actions');
     actions.innerHTML = '';
@@ -601,6 +747,7 @@
     const entry = s.deckEntry;
     const mode = s.mode;
     const opts = s.opts;
+    const resultGlossary = s.deckEntry.deck.glossary || {};
     $('#btn-retry').addEventListener('click', () => startQuiz(entry, mode === 'review' ? 'shuffle' : mode, opts));
     $('#btn-home').addEventListener('click', goHome);
     const retryWrong = $('#btn-retry-wrong');
@@ -608,6 +755,8 @@
 
     state.session = null;
     show('view-result');
+    activeGlossary = resultGlossary;
+    highlightGlossaryTerms($('#result-area'), resultGlossary);
   }
 
   function goHome() {
@@ -661,6 +810,7 @@
 
   async function init() {
     initTheme();
+    initTooltip();
     $('#btn-quit').addEventListener('click', () => {
       if (confirm('クイズを中断してホームに戻りますか？')) goHome();
     });
