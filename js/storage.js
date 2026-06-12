@@ -8,6 +8,9 @@
   const HISTORY_KEY = 'lx:history:v1';   // セッション履歴(分野別内訳つき)
   const QSTATS_KEY = 'lx:qstats:v1';     // 問題ごとの解答統計
   const AI_KEY = 'lx:ai:v1';             // AIアドバイス設定(APIキー等)
+  const DAYS_KEY = 'lx:days:v1';         // 日別の学習量 {YYYY-MM-DD: [解答数, 正解数]}
+  const PROFILE_KEY = 'lx:profile:v1';   // 学習の目標・試験日
+  const ADVICE_KEY = 'lx:advice:v1';     // 最後に生成したAIアドバイス
   const HISTORY_LIMIT = 50;              // デッキごとに保持するセッション数
 
   function load(key, fallback) {
@@ -96,6 +99,27 @@
       all[deckId] = stats;
       save(QSTATS_KEY, all);
     },
+
+    // 日別の学習量(連続学習日数・学習カレンダー用)
+    recordDailyActivity(answered, correct) {
+      const all = load(DAYS_KEY, {});
+      const d = new Date();
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const day = all[key] || [0, 0];
+      day[0] += answered;
+      day[1] += correct;
+      all[key] = day;
+      save(DAYS_KEY, all);
+    },
+    getDailyActivity() { return load(DAYS_KEY, {}); },
+
+    // 学習プロフィール {goal, examDate}
+    getProfile() { return load(PROFILE_KEY, {}); },
+    setProfile(p) { save(PROFILE_KEY, p); },
+
+    // 最後に生成したAIアドバイス {at, text}
+    getLastAdvice() { return load(ADVICE_KEY, null); },
+    setLastAdvice(a) { save(ADVICE_KEY, a); },
 
     // AIアドバイス設定 {apiKey, model}
     getAiSettings() { return load(AI_KEY, {}); },
