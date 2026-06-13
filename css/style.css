@@ -343,8 +343,8 @@ img { max-width: 100%; border-radius: 10px; }
 .q-type-badge { margin-bottom: 0; }
 
 /* 章フィルタ */
-.deck-filter { margin-bottom: 0.6rem; }
-.chapter-label { font-size: 0.82rem; color: var(--text-muted); }
+.deck-filter { margin-bottom: 0.6rem; display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; }
+.chapter-label { font-size: 0.82rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.3rem; }
 .chapter-select {
   font: inherit;
   font-size: 0.85rem;

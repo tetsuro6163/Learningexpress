@@ -318,24 +318,53 @@
         <div class="deck-filter"></div>
         <div class="deck-actions"></div>`;
 
+      const types = Object.keys(typeCounts);
+      const filter = card.querySelector('.deck-filter');
+
       // 章フィルタ(章が2つ以上あるデッキのみ)
       let select = null;
       if (cats.length > 1) {
-        const filter = card.querySelector('.deck-filter');
         const lbl = document.createElement('label');
         lbl.className = 'chapter-label';
         lbl.textContent = '出題範囲: ';
         select = document.createElement('select');
         select.className = 'chapter-select';
-        select.innerHTML = `<option value="">全範囲 (${deck.questions.length}問)</option>` +
-          cats.map(c => `<option value="${c.replace(/"/g, '&quot;')}">${c} (${catCounts[c]}問)</option>`).join('');
+        select.innerHTML = `<option value="">全範囲</option>` +
+          cats.map(c => `<option value="${c.replace(/"/g, '&quot;')}">${c}</option>`).join('');
         lbl.appendChild(select);
         filter.appendChild(lbl);
       }
+
+      // 種類フィルタ(問題の種類が2つ以上あるデッキのみ)
+      let typeSelect = null;
+      if (types.length > 1) {
+        const lbl = document.createElement('label');
+        lbl.className = 'chapter-label';
+        lbl.textContent = '種類: ';
+        typeSelect = document.createElement('select');
+        typeSelect.className = 'chapter-select type-select';
+        typeSelect.innerHTML = `<option value="">すべての種類</option>` +
+          types.map(t => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join('');
+        lbl.appendChild(typeSelect);
+        filter.appendChild(lbl);
+      }
+
       const currentCategory = () => (select ? select.value : '');
-      const filteredCount = () => {
-        const c = currentCategory();
-        return c ? catCounts[c] : deck.questions.length;
+      const currentType = () => (typeSelect ? typeSelect.value : '');
+      const countMatching = (cat, type) => deck.questions.filter(q =>
+        (!cat || q.category === cat) && (!type || q.type === type)).length;
+      const filteredCount = () => countMatching(currentCategory(), currentType());
+
+      // 選択中の条件に合わせて、もう一方のフィルタの件数表示を更新する
+      const refreshCounts = () => {
+        const cat = currentCategory();
+        const type = currentType();
+        if (select) Array.from(select.options).forEach(opt => {
+          opt.textContent = `${opt.value || '全範囲'} (${countMatching(opt.value, type)}問)`;
+        });
+        if (typeSelect) Array.from(typeSelect.options).forEach(opt => {
+          opt.textContent = `${opt.value ? TYPE_LABEL[opt.value] : 'すべての種類'} (${countMatching(cat, opt.value)}問)`;
+        });
       };
 
       const actions = card.querySelector('.deck-actions');
@@ -347,15 +376,17 @@
         actions.appendChild(b);
         return b;
       };
-      mkBtn('🧠 おまかせ特訓', 'btn btn-smart', () => startQuiz(entry, 'smart', { category: currentCategory() }));
-      mkBtn('▶ 順番に解く', 'btn btn-primary', () => startQuiz(entry, 'normal', { category: currentCategory() }));
-      mkBtn('🔀 シャッフル', 'btn', () => startQuiz(entry, 'shuffle', { category: currentCategory() }));
+      const filterOpts = () => ({ category: currentCategory(), type: currentType() });
+      mkBtn('🧠 おまかせ特訓', 'btn btn-smart', () => startQuiz(entry, 'smart', filterOpts()));
+      mkBtn('▶ 順番に解く', 'btn btn-primary', () => startQuiz(entry, 'normal', filterOpts()));
+      mkBtn('🔀 シャッフル', 'btn', () => startQuiz(entry, 'shuffle', filterOpts()));
 
       // 大きいデッキはランダム抜き出しモード
-      const randomBtn = mkBtn('🎲 ランダム20問', 'btn', () => startQuiz(entry, 'shuffle', { category: currentCategory(), limit: 20 }));
-      const syncRandom = () => { randomBtn.hidden = filteredCount() <= 20; };
-      syncRandom();
-      if (select) select.addEventListener('change', syncRandom);
+      const randomBtn = mkBtn('🎲 ランダム20問', 'btn', () => startQuiz(entry, 'shuffle', Object.assign(filterOpts(), { limit: 20 })));
+      const onFilterChange = () => { refreshCounts(); randomBtn.hidden = filteredCount() <= 20; };
+      onFilterChange();
+      if (select) select.addEventListener('change', onFilterChange);
+      if (typeSelect) typeSelect.addEventListener('change', onFilterChange);
 
       if (wrongCount > 0) {
         mkBtn(`🔁 間違いを復習 (${wrongCount})`, 'btn btn-review', () => startQuiz(entry, 'review', {}));
@@ -390,7 +421,7 @@
 
     if (mode === 'smart') {
       // 学習状況に適応した出題(間違えた問題・苦手・復習どきを優先)
-      prepared = LXTrainer.select(deckEntry, { limit: opts.limit || 20, category: opts.category })
+      prepared = LXTrainer.select(deckEntry, { limit: opts.limit || 20, category: opts.category, type: opts.type })
         .map(({ q, reason, focused }) => Object.assign(prepareQuestion(q), { reason, focused }));
     } else {
       let questions = deckEntry.deck.questions.slice();
@@ -399,12 +430,16 @@
         questions = shuffle(questions.filter(q => wrongIds.has(q.id)));
       } else {
         if (opts.category) questions = questions.filter(q => q.category === opts.category);
+        if (opts.type) questions = questions.filter(q => q.type === opts.type);
         if (mode === 'shuffle') questions = shuffle(questions);
         if (opts.limit && questions.length > opts.limit) questions = questions.slice(0, opts.limit);
       }
       prepared = questions.map(prepareQuestion);
     }
-    if (prepared.length === 0) return;
+    if (prepared.length === 0) {
+      alert('この条件に合う問題がありません。フィルタを変えてお試しください。');
+      return;
+    }
 
     activeGlossary = deckEntry.deck.glossary || {};
     state.session = {
