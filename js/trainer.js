@@ -70,6 +70,7 @@
 
     let pool = deckEntry.deck.questions;
     if (opts.category) pool = pool.filter(q => q.category === opts.category);
+    if (opts.type) pool = pool.filter(q => q.type === opts.type);
 
     const scored = pool.map(q => {
       const { reason, score } = classify(q, qstats[q.id], wrongIds, now);
